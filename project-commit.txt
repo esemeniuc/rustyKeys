@@ -1,20 +1,23 @@
 Team Member Names:
-Rowan Lindsay
+Rowan Lindsay 
+Leif Pedersen
 
 Team Member Student IDs:
 84097351
+33429168
 
 Team Member ugrad.cs.ubc.ca Logins:
 rowdl22
+lcnp
 
 Initial level commitment (80%, 90%, or 100%):
-100%
+100% 
 
 Tutorial time that at least one and ideally all members will guarantee to attend
-each week:
+each week: T1C 3pm Tuesday.
 
 3+ hours weekly that the group guarantees EACH OTHER to be available
-to meet (ideally face-to-face):
+to meet (ideally face-to-face): yes
 
 Three one-sentence ideas the team might pursue for the project. Note:
 Each idea should be plausible enough to show that the group has done

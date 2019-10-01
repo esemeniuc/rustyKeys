@@ -27,6 +27,7 @@ each week: T1C 3pm Tuesday.
 
 3+ hours weekly that the group guarantees EACH OTHER to be available
 to meet (ideally face-to-face): yes
+Tuesday and Thursday at 3:40pm to 5:10pm
 
 Three one-sentence ideas the team might pursue for the project. Note:
 Each idea should be plausible enough to show that the group has done
@@ -35,7 +36,7 @@ develop into a real project. Together, they should explore some
 meaningfully distinct project options (so, not just three variations
 on the same project).
 
-1. Basic GraphQL API in Elixir with Pheonix. Any API for some basic purpose (UBC Grade data, Vancouver housing prices, Famous quotes), made with Phoenix (Elixer web framework)
+1. Basic GraphQL API in Elixir with Phoenix. Any API for some basic purpose (UBC Grade data, Vancouver housing prices, Famous quotes), made with Phoenix (Elixir web framework)
 
 2. Build a Redis-inspired key-value store in Rust. The program would have the safety benifits of Rust and the speed of C
 

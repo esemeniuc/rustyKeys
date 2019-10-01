@@ -2,16 +2,19 @@ Team Member Names:
 Rowan Lindsay 
 Leif Pedersen
 Eric Semeniuc
+Liam Armstrong
 
 Team Member Student IDs:
 84097351
 33429168
 54383161
+55576755
 
 Team Member ugrad.cs.ubc.ca Logins:
 rowdl22
 lcnp
 esemeniu
+liam124
 
 Initial level commitment (80%, 90%, or 100%):
 100% 
@@ -29,8 +32,8 @@ develop into a real project. Together, they should explore some
 meaningfully distinct project options (so, not just three variations
 on the same project).
 
-1. 
+1. Basic GraphQL API in Elixir with Pheonix. Any API for some basic purpose (UBC Grade data, Vancouver housing prices, Famous quotes), made with Phoenix (Elixer web framework)
 
-2. 
+2. Build a Redis-inspired key-value store in Rust. The program would have the safety benifits of Rust and the speed of C
 
-3.
+3. Make a DSL for pattern matching in jq. jq is a command line tool for parsing JSON, with a really poorly designed pattern matching language. We would implement a DSL for replacing this pattern matching.

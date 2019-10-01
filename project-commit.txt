@@ -3,18 +3,21 @@ Rowan Lindsay
 Leif Pedersen
 Eric Semeniuc
 Liam Armstrong
+Soumya Singhal Routery
 
 Team Member Student IDs:
 84097351
 33429168
 54383161
 55576755
+21480199
 
 Team Member ugrad.cs.ubc.ca Logins:
 rowdl22
 lcnp
 esemeniu
 liam124
+soum
 
 Initial level commitment (80%, 90%, or 100%):
 100% 

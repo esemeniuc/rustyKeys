@@ -5,10 +5,12 @@ Leif Pedersen
 Team Member Student IDs:
 84097351
 33429168
+54383161
 
 Team Member ugrad.cs.ubc.ca Logins:
 rowdl22
 lcnp
+esemeniu
 
 Initial level commitment (80%, 90%, or 100%):
 100% 

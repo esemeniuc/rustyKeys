@@ -1,28 +1,17 @@
 use std::net::{TcpListener, TcpStream};
-use std::io::{Write, Read, Error};
+use std::io::{Write, Read};
 use futures::executor::ThreadPool;
 
-async fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
-    stream.write(b"Welcome\n")?;
+async fn handle_client(mut stream: TcpStream) {
+    stream.write(b"Welcome\n").expect("Error in while writing");
     print!("got connection!\n");
 
     let mut buf = [0; 5]; //5 bytes
     loop {
-        let num_bytes = stream.read(&mut buf);
-        match num_bytes {
-            Ok(0) => { return Ok(()); }
-            Ok(num_bytes) => {
-                println!("Got {} bytes", num_bytes);
-                stream.write(&buf[0..num_bytes])?;
-            }
-            Err(e) => { return Err(e); }
-        }
+        let num_bytes = stream.read(&mut buf).expect("Error in while writing");
+        println!("Got {} bytes", num_bytes);
+        stream.write(&buf[0..num_bytes]).expect("Error in while writing");
     }
-}
-
-
-async fn test(mut stream: TcpStream) {
-    println!("hi\n");
 }
 
 fn main() {
@@ -34,8 +23,7 @@ fn main() {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-//                pool.spawn_ok(handle_client(stream));
-                pool.spawn_ok(test(stream));
+                pool.spawn_ok(handle_client(stream));
             }
             Err(e) => { println!("Error in incoming: {}", e); }
         }

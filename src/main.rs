@@ -3,14 +3,14 @@ use std::io::{Write, Read};
 use futures::executor::ThreadPool;
 
 async fn handle_client(mut stream: TcpStream) {
-    stream.write(b"Welcome\n").expect("Error in while writing");
+    stream.write(b"Welcome\n").expect("Error writing");
     print!("got connection!\n");
+    let mut buf = [0; 1024]; //1KB
 
-    let mut buf = [0; 5]; //5 bytes
     loop {
-        let num_bytes = stream.read(&mut buf).expect("Error in while writing");
+        let num_bytes = stream.read(&mut buf).expect("Error reading");
         println!("Got {} bytes", num_bytes);
-        stream.write(&buf[0..num_bytes]).expect("Error in while writing");
+        stream.write(&buf[0..num_bytes]).expect("Error writing");
     }
 }
 
@@ -22,10 +22,8 @@ fn main() {
     // accept connections and process them serially
     for stream in listener.incoming() {
         match stream {
-            Ok(stream) => {
-                pool.spawn_ok(handle_client(stream));
-            }
-            Err(e) => { println!("Error in incoming: {}", e); }
+            Ok(stream) => { pool.spawn_ok(handle_client(stream)); }
+            Err(e) => { println!("Error receiving incoming connection: {}", e); }
         }
     }
 }

@@ -1,7 +1,8 @@
 use std::net::{TcpListener, TcpStream};
 use std::io::{Write, Read, Error};
+use futures::executor::ThreadPool;
 
-fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
+async fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
     stream.write(b"Welcome\n")?;
     print!("got connection!\n");
 
@@ -19,15 +20,24 @@ fn handle_client(mut stream: TcpStream) -> Result<(), Error> {
     }
 }
 
+
+async fn test(mut stream: TcpStream) {
+    println!("hi\n");
+}
+
 fn main() {
+    let pool = ThreadPool::new().expect("Failed to create threadpool");
     let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
     print!("Listening\n");
 
     // accept connections and process them serially
     for stream in listener.incoming() {
         match stream {
-            Ok(stream) => { let _ = handle_client(stream); }
-            Err(e) => { println!("Error in handler: {}", e); }
+            Ok(stream) => {
+//                pool.spawn_ok(handle_client(stream));
+                pool.spawn_ok(test(stream));
+            }
+            Err(e) => { println!("Error in incoming: {}", e); }
         }
     }
 }

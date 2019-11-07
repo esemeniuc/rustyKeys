@@ -5,7 +5,6 @@ use async_std::task;
 use std::io::{Error, ErrorKind};
 use std::str::from_utf8;
 //use std::sync::RwLock;
-
 const ERROR_MSG: &[u8] = b"Error: Invalid command\r\n";
 
 async fn process(mut stream: TcpStream) -> io::Result<()> {

@@ -17,7 +17,7 @@ async fn process(mut stream: TcpStream, m: Arc<Mutex<HashMap<String, String>>>) 
     loop {
         let num_bytes = stream.read(&mut buf).await?;
         if num_bytes <= 0 { return Err(Error::new(ErrorKind::ConnectionAborted, "no bytes")); };
-        let s = from_utf8(&buf[0..num_bytes]).unwrap();
+        let s = from_utf8(&buf[0..num_bytes]).unwrap(); //TODO handle UTF8
 //        println!("Got {} bytes, msg: {}", num_bytes, s);
 
         match s.find(' ') {

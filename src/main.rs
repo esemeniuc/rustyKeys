@@ -4,12 +4,14 @@ use async_std::prelude::*;
 use async_std::task;
 use std::io::{Error, ErrorKind};
 use std::str::from_utf8;
-use async_std::sync::{Arc, Mutex};
+use async_std::sync::{Arc, RwLock};
 use std::collections::HashMap;
 
 const ERROR_MSG: &[u8] = b"Error: Invalid command\r\n";
 
-async fn process(mut stream: TcpStream, m: Arc<Mutex<HashMap<String, String>>>) -> io::Result<()> {
+type TestRCMap<T, U> = Arc<RwLock<HashMap<T, U>>>;
+
+async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::Result<()> {
     println!("Accepted from: {}", stream.peer_addr()?);
     stream.write(b"Welcome\n").await?;
     let mut buf = [0; 1024]; //1KB
@@ -22,8 +24,8 @@ async fn process(mut stream: TcpStream, m: Arc<Mutex<HashMap<String, String>>>) 
 
         match s.find(' ') {
             Some(len) => match &s[..len] {
-                "GET" => stream.write(get_req(&s[len..], &m).await.as_ref()).await?,
-                "SET" => stream.write(set_req(&s[len..], "DUMBVAL", &m).await.as_ref()).await?, //TODO Parse key and value
+                "GET" => stream.write(get_req(&s[len..], &dict).await.as_ref()).await?,
+                "SET" => stream.write(set_req(&s[len..], "DUMBVAL", &dict).await.as_ref()).await?, //TODO Parse key and value
                 _ => stream.write(ERROR_MSG).await?
             },
             None => stream.write(ERROR_MSG).await?
@@ -31,16 +33,16 @@ async fn process(mut stream: TcpStream, m: Arc<Mutex<HashMap<String, String>>>) 
     };
 }
 
-async fn get_req(key: &str, dict: &Arc<Mutex<HashMap<String, String>>>) -> String {
-    let dict = dict.lock().await;
+async fn get_req(key: &str, dict: &TestRCMap<String, String>) -> String {
+    let dict = dict.read().await;
     match (*dict).get(key) {
         Some(val) => format!("got {}\n", val),
         None => format!("Error, key {} not found\n", key),
     }
 }
 
-async fn set_req(key: &str, val: &str, dict: &Arc<Mutex<HashMap<String, String>>>) -> String {
-    let mut dict = dict.lock().await;
+async fn set_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> String {
+    let mut dict = dict.write().await;
     match (*dict).insert(String::from(key), String::from(val)) {
         Some(val) => format!("set successful, old value {}\n", val), //TODO, make correct response via Redis spec
         None => format!("set successful with new key {}\n", key),
@@ -48,7 +50,7 @@ async fn set_req(key: &str, val: &str, dict: &Arc<Mutex<HashMap<String, String>>
 }
 
 fn main() -> io::Result<()> {
-    let dict = Arc::new(Mutex::new(HashMap::new()));
+    let dict = Arc::new(RwLock::new(HashMap::new()));
     task::block_on(async {
         let listener = TcpListener::bind("127.0.0.1:8080").await?;
         println!("Listening on {}", listener.local_addr()?);

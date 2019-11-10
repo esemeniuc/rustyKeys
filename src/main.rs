@@ -24,9 +24,15 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
 
         match s.find(' ') {
             Some(len) => match &s[..len] {
-                "GET" => stream.write(get_req(&s[len..], &dict).await.as_ref()).await?,
-                "SET" => stream.write(set_req(&s[len..], "DUMBVAL", &dict).await.as_ref()).await?, //TODO Parse key and value
-                _ => stream.write(ERROR_MSG).await?
+                "GET" => stream.write(get_req(&s[(1 + len)..], &dict).await.as_ref()).await?,
+                "SET" => match &s[(len + 1)..].find(' ') {
+                    Some(len2) => 
+                        stream.write(
+                            set_req(&s[(1 + len)..(1 + len + *len2)], 
+                                    &s[(2 + len + *len2)..], &dict).await.as_ref()).await?,
+                    None => stream.write(ERROR_MSG).await?
+                },
+                _ => stream.write(ERROR_MSG).await?,
             },
             None => stream.write(ERROR_MSG).await?
         };

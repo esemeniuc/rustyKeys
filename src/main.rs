@@ -19,14 +19,20 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
     loop {
         let num_bytes = stream.read(&mut buf).await?;
         if num_bytes <= 0 { return Err(Error::new(ErrorKind::ConnectionAborted, "no bytes")); };
-        let s = from_utf8(&buf[0..num_bytes]).unwrap(); //TODO handle UTF8
+        let s = from_utf8(&buf[0..num_bytes]).unwrap().trim(); //TODO handle UTF8
 //        println!("Got {} bytes, msg: {}", num_bytes, s);
 
         match s.find(' ') {
             Some(len) => match &s[..len] {
-                "GET" => stream.write(get_req(&s[len..], &dict).await.as_ref()).await?,
-                "SET" => stream.write(set_req(&s[len..], "DUMBVAL", &dict).await.as_ref()).await?, //TODO Parse key and value
-                _ => stream.write(ERROR_MSG).await?
+                "GET" => stream.write(get_req(&s[(1 + len)..], &dict).await.as_ref()).await?,
+                "SET" => match &s[(len + 1)..].find(' ') {
+                    Some(len2) => 
+                        stream.write(
+                            set_req(&s[(1 + len)..(1 + len + *len2)], 
+                                    &s[(2 + len + *len2)..], &dict).await.as_ref()).await?,
+                    None => stream.write(ERROR_MSG).await?
+                },
+                _ => stream.write(ERROR_MSG).await?,
             },
             None => stream.write(ERROR_MSG).await?
         };
@@ -37,7 +43,7 @@ async fn get_req(key: &str, dict: &TestRCMap<String, String>) -> String {
     let dict = dict.read().await;
     match (*dict).get(key) {
         Some(val) => format!("got {}\n", val),
-        None => format!("Error, key {} not found\n", key),
+        None => format!("Error, key ${}$ not found\n", key),
     }
 }
 

@@ -19,7 +19,7 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
     loop {
         let num_bytes = stream.read(&mut buf).await?;
         if num_bytes <= 0 { return Err(Error::new(ErrorKind::ConnectionAborted, "no bytes")); };
-        let s = from_utf8(&buf[0..num_bytes]).unwrap(); //TODO handle UTF8
+        let s = from_utf8(&buf[0..num_bytes]).unwrap().trim(); //TODO handle UTF8
 //        println!("Got {} bytes, msg: {}", num_bytes, s);
 
         match s.find(' ') {
@@ -43,7 +43,7 @@ async fn get_req(key: &str, dict: &TestRCMap<String, String>) -> String {
     let dict = dict.read().await;
     match (*dict).get(key) {
         Some(val) => format!("got {}\n", val),
-        None => format!("Error, key {} not found\n", key),
+        None => format!("Error, key ${}$ not found\n", key),
     }
 }
 

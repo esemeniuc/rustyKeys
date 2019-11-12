@@ -20,12 +20,19 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
         let num_bytes = stream.read(&mut buf).await?;
         if num_bytes <= 0 { return Err(Error::new(ErrorKind::ConnectionAborted, "no bytes")); };
         let s = from_utf8(&buf[0..num_bytes]).unwrap(); //TODO handle UTF8
-//        println!("Got {} bytes, msg: {}", num_bytes, s);
+//         println!("Got {} bytes, msg: {}", num_bytes, s);
+
+        let argvec = s.split(" ").collect::<Vec<_>>();
+        let key = argvec[1].to_string();
+        let mut val = "";
+        if argvec.len() > 2 {
+            val = &argvec[2];
+        }
 
         match s.find(' ') {
             Some(len) => match &s[..len] {
-                "GET" => stream.write(get_req(&s[len..], &dict).await.as_ref()).await?,
-                "SET" => stream.write(set_req(&s[len..], "DUMBVAL", &dict).await.as_ref()).await?, //TODO Parse key and value
+                "GET" => stream.write(get_req(&key, &dict).await.as_ref()).await?,
+                "SET" => stream.write(set_req(&key, &val.to_string(), &dict).await.as_ref()).await?,
                 _ => stream.write(ERROR_MSG).await?
             },
             None => stream.write(ERROR_MSG).await?

@@ -32,6 +32,7 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
                                     &s[(2 + len + *len2)..], &dict).await.as_ref()).await?,
                     None => stream.write(ERROR_MSG).await?
                 },
+                "DEL" => stream.write(del_req(&s[(1 + len)..], &dict).await.as_ref()).await?,
                 _ => stream.write(ERROR_MSG).await?,
             },
             None => stream.write(ERROR_MSG).await?
@@ -52,6 +53,14 @@ async fn set_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> Stri
     match (*dict).insert(String::from(key), String::from(val)) {
         Some(val) => format!("set successful, old value {}\n", val), //TODO, make correct response via Redis spec
         None => format!("set successful with new key {}\n", key),
+    }
+}
+
+async fn del_req(key: &str, dict: &TestRCMap<String, String>) -> String {
+    let mut dict = dict.write().await;
+    match (*dict).remove(key) {
+        Some(val) => format!("Deleted k:{} v:{}\n", key, val),
+        None => format!("Error, key {} not found\n", key),
     }
 }
 

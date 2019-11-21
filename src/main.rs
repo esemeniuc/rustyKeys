@@ -6,39 +6,45 @@ use std::io::{Error, ErrorKind};
 use std::str::from_utf8;
 use async_std::sync::{Arc, RwLock};
 use std::collections::HashMap;
+use commands::tokenizer::tokenize;
 
 const ERROR_MSG: &[u8] = b"Error: Invalid command\r\n";
+const NIL_MSG: &[u8] = b"$-1\r\n";
 
 type TestRCMap<T, U> = Arc<RwLock<HashMap<T, U>>>;
+
 
 async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::Result<()> {
     println!("Accepted from: {}", stream.peer_addr()?);
     stream.write(b"Welcome\n").await?;
-    let mut buf = [0; 1024]; //1KB
+    let mut buf = [0; 1 << 10]; //1MB
 
     loop {
         let num_bytes = stream.read(&mut buf).await?;
         if num_bytes <= 0 { return Err(Error::new(ErrorKind::ConnectionAborted, "no bytes")); };
         let s = from_utf8(&buf[0..num_bytes]).unwrap().trim(); //TODO handle UTF8
-//        println!("Got {} bytes, msg: {}", num_bytes, s);
-
-        match s.find(' ') {
-            Some(len) => match &s[..len] {
-                "GET" => stream.write(get_req(&s[(1 + len)..], &dict).await.as_ref()).await?,
-                "SET" => match &s[(len + 1)..].find(' ') {
-                    Some(len2) => 
-                        stream.write(
-                            set_req(&s[(1 + len)..(1 + len + *len2)], 
-                                    &s[(2 + len + *len2)..], &dict).await.as_ref()).await?,
-                    None => stream.write(ERROR_MSG).await?
-                },
-                "DEL" => stream.write(del_req(&s[(1 + len)..], &dict).await.as_ref()).await?,
+        if let Ok(tokens) = tokenize(s) {
+            if tokens.len() == 0 {
+                stream.write(ERROR_MSG).await?;
+            }
+            match (tokens[0].text, tokens.len()) {
+                ("GET", 3) => stream.write(get_req(tokens[2].text, &dict).await.as_ref()).await?,
+                ("SET", 5) => stream.write(set_req(tokens[2].text, tokens[4].text, &dict).await.as_ref()).await?,
+                ("DEL", 3) => stream.write(del_req(vec![tokens[2].text], &dict).await.as_ref()).await?, //TODO handle any number of deletions
                 _ => stream.write(ERROR_MSG).await?,
-            },
-            None => stream.write(ERROR_MSG).await?
-        };
-    };
+            };
+        } else {
+            stream.write(b"Error: Could not tokenize\r\n").await?;
+        }
+    }
 }
+
+//\item SETNX key value
+//\item EXISTS key
+//\item TYPE key
+//\item RENAME key newkey
+//\item KEYS regex\_pattern
+
 
 async fn get_req(key: &str, dict: &TestRCMap<String, String>) -> String {
     let dict = dict.read().await;
@@ -56,12 +62,18 @@ async fn set_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> Stri
     }
 }
 
-async fn del_req(key: &str, dict: &TestRCMap<String, String>) -> String {
+
+async fn del_req(keys: Vec<&str>, dict: &TestRCMap<String, String>) -> String {
+    //https://redis.io/commands/del
     let mut dict = dict.write().await;
-    match (*dict).remove(key) {
-        Some(val) => format!("Deleted k:{} v:{}\n", key, val),
-        None => format!("Error, key {} not found\n", key),
+    let mut count:isize = 0;
+    for key in keys {
+        match (*dict).remove(key) {
+            Some(_) => count += 1,
+            _ => {}
+        }
     }
+    format!("{}\n", count)
 }
 
 fn main() -> io::Result<()> {

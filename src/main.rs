@@ -26,12 +26,12 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
             if tokens.len() == 0 {
                 stream.write(ERR_UNK_CMD).await?;
             }
-            match (tokens[0].text, tokens.len()) {
-                ("GET", 3) => stream.write(get_req(tokens[2].text, &dict).await.as_ref()).await?,
-                ("SET", 5) => stream.write(set_req(tokens[2].text, tokens[4].text, &dict).await.as_ref()).await?,
-                ("SETNX", 5) => stream.write(setnx_req(tokens[2].text, tokens[4].text, &dict).await.as_ref()).await?,
-                ("DEL", count) if count >= 3 => stream.write(
-                    del_req(get_remaining_params(tokens, 2), &dict).await.as_ref()).await?,
+            let tokens = get_tokens(tokens);
+            match (tokens[0], tokens.len()) {
+                ("GET", 1) => stream.write(get_req(tokens[1], &dict).await.as_ref()).await?,
+                ("SET", 3) => stream.write(set_req(tokens[1], tokens[2], &dict).await.as_ref()).await?,
+                ("SETNX", 3) => stream.write(setnx_req(tokens[1], tokens[2], &dict).await.as_ref()).await?,
+                ("DEL", count) if count >= 1 => stream.write(del_req(&tokens[1..], &dict).await.as_ref()).await?,
                 _ => stream.write(ERR_UNK_CMD).await?,
             };
         } else {
@@ -45,13 +45,13 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
 //\item RENAME key newkey
 //\item KEYS regex\_pattern
 
-fn get_remaining_params(tokens: Vec<Token>, start: usize) -> Vec<&str> {
-    tokens[start..].iter()
+fn get_tokens(tokens: Vec<Token>) -> Vec<&str> {
+    tokens.iter()
         .filter(|&x| x.token_type == TokenType::Word)
         .map(|&x| x.text).collect()
 }
 
-fn resp_bulk_format(actual_data: &String) -> String {
+fn resp_bulk_format(actual_data: &str) -> String {
     //A "$" byte followed by the number of bytes composing the string (a prefixed length), terminated by CRLF.
     //The actual string data.
     //A final CRLF.
@@ -88,12 +88,12 @@ async fn setnx_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> St
     format!(":1\n")
 }
 
-async fn del_req(keys: Vec<&str>, dict: &TestRCMap<String, String>) -> String {
+async fn del_req(keys: &[&str], dict: &TestRCMap<String, String>) -> String {
     //https://redis.io/commands/del
-    let mut dict = dict.write().await;
     let mut count: isize = 0;
+    let mut dict = dict.write().await;
     for key in keys {
-        match (*dict).remove(key) {
+        match (*dict).remove(*key) {
             Some(_) => count += 1,
             _ => {}
         }

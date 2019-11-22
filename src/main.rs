@@ -29,6 +29,7 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
             match (tokens[0].text, tokens.len()) {
                 ("GET", 3) => stream.write(get_req(tokens[2].text, &dict).await.as_ref()).await?,
                 ("SET", 5) => stream.write(set_req(tokens[2].text, tokens[4].text, &dict).await.as_ref()).await?,
+                ("SETNX", 5) => stream.write(setnx_req(tokens[2].text, tokens[4].text, &dict).await.as_ref()).await?,
                 ("DEL", 3) => stream.write(del_req(vec![tokens[2].text], &dict).await.as_ref()).await?, //TODO handle any number of deletions
                 _ => stream.write(ERR_UNK_CMD).await?,
             };
@@ -69,6 +70,17 @@ async fn set_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> Stri
     }
 }
 
+async fn setnx_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> String {
+    //https://redis.io/commands/setnx
+    let key = String::from(key);
+    let val = String::from(val);
+    let mut dict = dict.write().await;
+    if (*dict).contains_key(&key) {
+        return format!(":0\n");
+    }
+    (*dict).insert(key, val);
+    format!(":1\n")
+}
 
 async fn del_req(keys: Vec<&str>, dict: &TestRCMap<String, String>) -> String {
     //https://redis.io/commands/del

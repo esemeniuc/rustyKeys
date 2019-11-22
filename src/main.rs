@@ -28,11 +28,11 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
             }
             let tokens = get_tokens(tokens);
             match (tokens[0], tokens.len()) {
-                ("GET", 1) => stream.write(get_req(tokens[1], &dict).await.as_ref()).await?,
+                ("GET", 2) => stream.write(get_req(tokens[1], &dict).await.as_ref()).await?,
                 ("SET", 3) => stream.write(set_req(tokens[1], tokens[2], &dict).await.as_ref()).await?,
                 ("SETNX", 3) => stream.write(setnx_req(tokens[1], tokens[2], &dict).await.as_ref()).await?,
                 ("DEL", count) if count >= 1 => stream.write(del_req(&tokens[1..], &dict).await.as_ref()).await?,
-                ("EXISTS", 1) => stream.write(exists_req(&tokens[1], &dict).await.as_ref()).await?,
+                ("EXISTS", 2) => stream.write(exists_req(&tokens[1], &dict).await.as_ref()).await?,
                 _ => stream.write(ERR_UNK_CMD).await?,
             };
         } else {
@@ -91,6 +91,7 @@ async fn setnx_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> St
 
 async fn exists_req(key: &str, dict: &TestRCMap<String, String>) -> String {
     //https://redis.io/commands/exists
+    //TODO handle arbitrary number of keys
     let dict = dict.read().await;
     match (*dict).contains_key(key) {
         true => format!(":1\n"),

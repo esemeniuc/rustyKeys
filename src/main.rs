@@ -6,7 +6,7 @@ use std::io::{Error, ErrorKind};
 use std::str::from_utf8;
 use async_std::sync::{Arc, RwLock};
 use std::collections::HashMap;
-use commands::tokenizer::tokenize;
+use commands::tokenizer::{Token, tokenize, TokenType};
 
 const ERR_UNK_CMD: &[u8] = b"-ERR unknown command\r\n";
 const NIL_MSG: &str = "$-1\n";
@@ -30,7 +30,8 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
                 ("GET", 3) => stream.write(get_req(tokens[2].text, &dict).await.as_ref()).await?,
                 ("SET", 5) => stream.write(set_req(tokens[2].text, tokens[4].text, &dict).await.as_ref()).await?,
                 ("SETNX", 5) => stream.write(setnx_req(tokens[2].text, tokens[4].text, &dict).await.as_ref()).await?,
-                ("DEL", 3) => stream.write(del_req(vec![tokens[2].text], &dict).await.as_ref()).await?, //TODO handle any number of deletions
+                ("DEL", count) if count >= 3 => stream.write(
+                    del_req(get_remaining_params(tokens, 2), &dict).await.as_ref()).await?,
                 _ => stream.write(ERR_UNK_CMD).await?,
             };
         } else {
@@ -39,11 +40,16 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
     }
 }
 
-//\item SETNX key value
 //\item EXISTS key
 //\item TYPE key
 //\item RENAME key newkey
 //\item KEYS regex\_pattern
+
+fn get_remaining_params(tokens: Vec<Token>, start: usize) -> Vec<&str> {
+    tokens[start..].iter()
+        .filter(|&x| x.token_type == TokenType::Word)
+        .map(|&x| x.text).collect()
+}
 
 fn resp_bulk_format(actual_data: &String) -> String {
     //A "$" byte followed by the number of bytes composing the string (a prefixed length), terminated by CRLF.

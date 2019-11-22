@@ -32,6 +32,7 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
                 ("SET", 3) => stream.write(set_req(tokens[1], tokens[2], &dict).await.as_ref()).await?,
                 ("SETNX", 3) => stream.write(setnx_req(tokens[1], tokens[2], &dict).await.as_ref()).await?,
                 ("DEL", count) if count >= 1 => stream.write(del_req(&tokens[1..], &dict).await.as_ref()).await?,
+                ("EXISTS", 1) => stream.write(exists_req(&tokens[1], &dict).await.as_ref()).await?,
                 _ => stream.write(ERR_UNK_CMD).await?,
             };
         } else {
@@ -40,7 +41,6 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
     }
 }
 
-//\item EXISTS key
 //\item TYPE key
 //\item RENAME key newkey
 //\item KEYS regex\_pattern
@@ -60,6 +60,7 @@ fn resp_bulk_format(actual_data: &str) -> String {
 }
 
 async fn get_req(key: &str, dict: &TestRCMap<String, String>) -> String {
+    //https://redis.io/commands/GET
     let dict = dict.read().await;
     match (*dict).get(key) {
         Some(val) => resp_bulk_format(val),
@@ -86,6 +87,15 @@ async fn setnx_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> St
     }
     (*dict).insert(key, val);
     format!(":1\n")
+}
+
+async fn exists_req(key: &str, dict: &TestRCMap<String, String>) -> String {
+    //https://redis.io/commands/exists
+    let dict = dict.read().await;
+    match (*dict).contains_key(key) {
+        true => format!(":1\n"),
+        false => format!(":0\n"),
+    }
 }
 
 async fn del_req(keys: &[&str], dict: &TestRCMap<String, String>) -> String {

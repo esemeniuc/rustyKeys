@@ -9,13 +9,13 @@ use std::collections::HashMap;
 use commands::tokenizer::{Token, tokenize, TokenType};
 
 const ERR_UNK_CMD: &[u8] = b"-ERR unknown command\r\n";
-const NIL_MSG: &str = "$-1\n";
+const NIL_MSG: &str = "$-1\r\n";
 
 type TestRCMap<T, U> = Arc<RwLock<HashMap<T, U>>>;
 
 async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::Result<()> {
     println!("Accepted from: {}", stream.peer_addr()?);
-    stream.write(b"Welcome\n").await?;
+    stream.write(b"Welcome\r\n").await?;
     let mut buf = [0; 1 << 10]; //1MB
 
     loop {
@@ -34,6 +34,7 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
                 ("SETNX", 3) => stream.write(setnx_req(tokens[1], tokens[2], &dict).await.as_ref()).await?,
                 ("DEL", count) if count >= 1 => stream.write(del_req(&tokens[1..], &dict).await.as_ref()).await?,
                 ("EXISTS", 2) => stream.write(exists_req(&tokens[1], &dict).await.as_ref()).await?,
+                ("TYPE", 2) => stream.write(type_req(&tokens[1], &dict).await.as_ref()).await?,
                 _ => stream.write(ERR_UNK_CMD).await?,
             };
         } else {
@@ -42,7 +43,6 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
     }
 }
 
-//\item TYPE key
 //\item RENAME key newkey
 //\item KEYS regex\_pattern
 
@@ -57,8 +57,13 @@ fn resp_bulk_format(actual_data: &str) -> String {
     //The actual string data.
     //A final CRLF.
     //see https://redis.io/topics/protocol
-    format!("${}\n{}\n", actual_data.len(), actual_data)
+    format!("${}\r\n{}\r\n", actual_data.len(), actual_data)
 }
+
+fn integer_format(x: isize) -> String {
+    format!(":{}\r\n", x)
+}
+
 
 async fn get_req(key: &str, dict: &TestRCMap<String, String>) -> String {
     //https://redis.io/commands/GET
@@ -74,7 +79,7 @@ async fn set_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> Stri
     //TODO Handle NX and XX
     let mut dict = dict.write().await;
     match (*dict).insert(String::from(key), String::from(val)) {
-        _ => format!("+OK\n"),
+        _ => format!("+OK\r\n"),
     }
 }
 
@@ -84,10 +89,10 @@ async fn setnx_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> St
     let val = String::from(val);
     let mut dict = dict.write().await;
     if (*dict).contains_key(&key) {
-        return format!(":0\n");
+        return integer_format(0);
     }
     (*dict).insert(key, val);
-    format!(":1\n")
+    integer_format(1)
 }
 
 async fn exists_req(key: &str, dict: &TestRCMap<String, String>) -> String {
@@ -95,8 +100,8 @@ async fn exists_req(key: &str, dict: &TestRCMap<String, String>) -> String {
     //TODO handle arbitrary number of keys
     let dict = dict.read().await;
     match (*dict).contains_key(key) {
-        true => format!(":1\n"),
-        false => format!(":0\n"),
+        true => integer_format(1),
+        false => integer_format(0)
     }
 }
 
@@ -110,8 +115,18 @@ async fn del_req(keys: &[&str], dict: &TestRCMap<String, String>) -> String {
             _ => {}
         }
     }
-    format!(":{}\n", count)
+    integer_format(count)
 }
+
+async fn type_req(key: &str, dict: &TestRCMap<String, String>) -> String {
+    //https://redis.io/commands/type
+    let dict = dict.read().await;
+    match (*dict).contains_key(key) {
+        true => format!("+string\r\n"),
+        false => format!("+none\r\n"),
+    }
+}
+
 
 fn main() -> io::Result<()> {
     let dict = Arc::new(RwLock::new(HashMap::new()));

@@ -23,7 +23,8 @@ fn test() {
     assert!(tokenize2("*2\r\n$10\r\nGETTTTTTAB\r\n$11\r\naaaaaaaaaxy\r\n".as_ref()) == vec!["GETTTTTTAB", "aaaaaaaaaxy"]);
     assert!(tokenize2("*2\r\n$3\r\nGET\r\n$5\r\napple\r\n".as_ref()) == vec!["GET", "apple"]);
     assert!(tokenize2("*3\r\n$3\r\nSET\r\n$2\r\nXX\r\n$5\r\napple\r\n".as_ref()) == vec!["SET", "XX", "apple"]);
-    assert!(tokenize2("*1\r\n$3\r\nSET\r\n$2\r\nXX\r\n$5\r\napple\r\n".as_ref()) == vec!["SET", "XX", "apple"]);
+    assert!(tokenize2("*4\r\n$3\r\nDEL\r\n$2\r\nXX\r\n$1\r\nY\r\n$3\r\nABC\r\n".as_ref()) == vec!["DEL", "XX", "Y", "ABC"]);
+    assert!(tokenize2("*1\r\n$4\r\nPING\r\n".as_ref()) == vec!["PING"]);
 }
 
 //stops on non digit number

@@ -1,11 +1,12 @@
+use std::collections::HashMap;
+use std::io::{Error, ErrorKind};
+use std::str::from_utf8;
+
 use async_std::io;
 use async_std::net::{TcpListener, TcpStream};
 use async_std::prelude::*;
-use async_std::task;
-use std::io::{Error, ErrorKind};
-use std::str::from_utf8;
 use async_std::sync::{Arc, RwLock};
-use std::collections::HashMap;
+use async_std::task;
 use commands::tokenizer::{tokenize, TokenType};
 
 const ERR_UNK_CMD: &[u8] = b"-ERR unknown command\r\n";
@@ -40,26 +41,26 @@ fn parse_int(buf: &[u8]) -> (usize, usize) {
     (out, i)
 }
 
-
 fn resp_tokenize(buf: &[u8]) -> Vec<&str> {
     /*eg. ran: cli.get('a')
     The client sends:
-    *2\r\n //token count
-    $3\r\n //first cmd length
-    GET\r\n //command
-    $1\r\n //next token len
-    a\r\n*/ //token
+    *2\r\n      //token count
+    $3\r\n      //first cmd length
+    GET\r\n     //command
+    $1\r\n      //next token len
+    a\r\n       //token
+    */
 
     macro_rules! consume_valid_separator_or_return {
-    //consumes a new line if in range, and updates i to point after newline
+    //consumes a $sep if in range, and updates i to point after $sep
     //else returns out
     //see https://medium.com/@phoomparin/a-beginners-guide-to-rust-macros-5c75594498f1
-        ($buf: expr, $i: expr, $retval: expr) => {
-            if $i + CRLF.len() >= $buf.len() ||
-                &$buf[$i..$i + CRLF.len()] != CRLF {
+        ($buf: expr, $sep: expr, $i: expr, $retval: expr) => {
+            if $i + $sep.len() >= $buf.len() ||
+                &$buf[$i..$i + $sep.len()] != $sep {
                 return $retval;
             } else {
-                $i += CRLF.len(); //point to beginning of rest
+                $i += $sep.len(); //point to beginning of rest
             }
         }
     }
@@ -68,12 +69,12 @@ fn resp_tokenize(buf: &[u8]) -> Vec<&str> {
     let (token_count, iter_offset) = parse_int(&buf[1..]); //first char is asterisk
     let mut i = iter_offset + 1; //i points to next char after number
 
-    consume_valid_separator_or_return!(buf, i, out);
+    consume_valid_separator_or_return!(buf, CRLF, i, out);
     for _ in 0..token_count {
-        if buf[i] != '$' as u8 { return out; } else { i += 1; }
+        consume_valid_separator_or_return!(buf, b"$", i, out);
         let (cmd_len, iter_offset) = parse_int(&buf[i..]); //get command length
         i += iter_offset;
-        consume_valid_separator_or_return!(buf, i, out);
+        consume_valid_separator_or_return!(buf, CRLF, i, out);
 
         //push token
         if let Ok(x) = from_utf8(&buf[i..i + cmd_len]) {
@@ -81,7 +82,7 @@ fn resp_tokenize(buf: &[u8]) -> Vec<&str> {
         }
 
         i += cmd_len;
-        consume_valid_separator_or_return!(buf, i, out);
+        consume_valid_separator_or_return!(buf, CRLF, i, out);
     }
     out
 }
@@ -100,7 +101,6 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
         };
 
         println!("tokens{:?}", tokens);
-//        let tokens: Vec<&str> = tokens.iter().map(|x| x.as_str()).collect();
         if tokens.len() == 0 {
             stream.write(ERR_UNK_CMD).await?;
             continue;
@@ -125,7 +125,7 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
 fn netcat_tokenize(buf: &[u8]) -> Vec<&str> {
     let s = from_utf8(buf).unwrap_or_default().trim();
     let t = tokenize(s).unwrap_or_default();
-        t.iter()
+    t.iter()
         .filter(|&x| x.token_type == TokenType::Word)
         .map(|&x| x.text).collect()
 }

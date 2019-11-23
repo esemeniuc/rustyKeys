@@ -3,5 +3,14 @@ Main project for CPSC 311
 
 Benchmark
 ```bash
-redis-benchmark -n 10000 eval 'redis.call("SETNX __rand_int__ __rand_int__"); redis.call("INCR __rand_int__); redis.call("GET __rand_int__")'
+#GET and SET test
+#sends: 
+#tokens["SET", "key:000000000007", "xxx"]
+#tokens["GET", "key:000000000032"]
+
+redis-benchmark -n 100000 -r 50 -t GET,SET
+
+#SETNX
+#sends: tokens["SETNX", "key:000000000026", "DUMB_VAL"]
+redis-benchmark -n 2 -r 50 SETNX key:__rand_int__ DUMB_VAL
 ```

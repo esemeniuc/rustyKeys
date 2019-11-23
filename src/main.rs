@@ -6,7 +6,7 @@ use std::io::{Error, ErrorKind};
 use std::str::from_utf8;
 use async_std::sync::{Arc, RwLock};
 use std::collections::HashMap;
-use commands::tokenizer::{Token, tokenize, TokenType};
+use commands::tokenizer::{tokenize, TokenType};
 
 const ERR_UNK_CMD: &[u8] = b"-ERR unknown command\r\n";
 const NIL_MSG: &str = "$-1\r\n";
@@ -20,11 +20,11 @@ fn test() {
     assert!(parse_int("\r\n".as_bytes()) == (0, 0));
     assert!(parse_int("1\r\n".as_bytes()) == (1, 1));
     assert!(parse_int("10391\r\n".as_bytes()) == (10391, 5));
-    assert!(tokenize2("*2\r\n$10\r\nGETTTTTTAB\r\n$11\r\naaaaaaaaaxy\r\n".as_ref()) == vec!["GETTTTTTAB", "aaaaaaaaaxy"]);
-    assert!(tokenize2("*2\r\n$3\r\nGET\r\n$5\r\napple\r\n".as_ref()) == vec!["GET", "apple"]);
-    assert!(tokenize2("*3\r\n$3\r\nSET\r\n$2\r\nXX\r\n$5\r\napple\r\n".as_ref()) == vec!["SET", "XX", "apple"]);
-    assert!(tokenize2("*4\r\n$3\r\nDEL\r\n$2\r\nXX\r\n$1\r\nY\r\n$3\r\nABC\r\n".as_ref()) == vec!["DEL", "XX", "Y", "ABC"]);
-    assert!(tokenize2("*1\r\n$4\r\nPING\r\n".as_ref()) == vec!["PING"]);
+    assert!(resp_tokenize("*2\r\n$10\r\nGETTTTTTAB\r\n$11\r\naaaaaaaaaxy\r\n".as_ref()) == vec!["GETTTTTTAB", "aaaaaaaaaxy"]);
+    assert!(resp_tokenize("*2\r\n$3\r\nGET\r\n$5\r\napple\r\n".as_ref()) == vec!["GET", "apple"]);
+    assert!(resp_tokenize("*3\r\n$3\r\nSET\r\n$2\r\nXX\r\n$5\r\napple\r\n".as_ref()) == vec!["SET", "XX", "apple"]);
+    assert!(resp_tokenize("*4\r\n$3\r\nDEL\r\n$2\r\nXX\r\n$1\r\nY\r\n$3\r\nABC\r\n".as_ref()) == vec!["DEL", "XX", "Y", "ABC"]);
+    assert!(resp_tokenize("*1\r\n$4\r\nPING\r\n".as_ref()) == vec!["PING"]);
 }
 
 //stops on non digit number
@@ -40,20 +40,8 @@ fn parse_int(buf: &[u8]) -> (usize, usize) {
     (out, i)
 }
 
-//consumes a new line if in range, and updates i to point after newline
-//else returns out
-macro_rules! consume_valid_newline_or_return {
-    ($buf: expr, $i: expr, $retval: expr) => {
-        if $i + CRLF.len() >= $buf.len() ||
-            &$buf[$i..$i + CRLF.len()] != CRLF {
-            return $retval;
-        } else {
-            $i += CRLF.len(); //point to beginning of rest
-        }
-    }
-}
 
-fn tokenize2(buf: &[u8]) -> Vec<String> {
+fn resp_tokenize(buf: &[u8]) -> Vec<&str> {
     /*eg. ran: cli.get('a')
     The client sends:
     *2\r\n //token count
@@ -61,24 +49,39 @@ fn tokenize2(buf: &[u8]) -> Vec<String> {
     GET\r\n //command
     $1\r\n //next token len
     a\r\n*/ //token
+
+    macro_rules! consume_valid_separator_or_return {
+    //consumes a new line if in range, and updates i to point after newline
+    //else returns out
+    //see https://medium.com/@phoomparin/a-beginners-guide-to-rust-macros-5c75594498f1
+        ($buf: expr, $i: expr, $retval: expr) => {
+            if $i + CRLF.len() >= $buf.len() ||
+                &$buf[$i..$i + CRLF.len()] != CRLF {
+                return $retval;
+            } else {
+                $i += CRLF.len(); //point to beginning of rest
+            }
+        }
+    }
+
     let mut out = Vec::new();
     let (token_count, iter_offset) = parse_int(&buf[1..]); //first char is asterisk
     let mut i = iter_offset + 1; //i points to next char after number
 
-    consume_valid_newline_or_return!(buf, i, out);
+    consume_valid_separator_or_return!(buf, i, out);
     for _ in 0..token_count {
         if buf[i] != '$' as u8 { return out; } else { i += 1; }
         let (cmd_len, iter_offset) = parse_int(&buf[i..]); //get command length
         i += iter_offset;
-        consume_valid_newline_or_return!(buf, i, out);
+        consume_valid_separator_or_return!(buf, i, out);
 
         //push token
         if let Ok(x) = from_utf8(&buf[i..i + cmd_len]) {
-            out.push(String::from(x));
+            out.push(x);
         }
 
         i += cmd_len;
-        consume_valid_newline_or_return!(buf, i, out);
+        consume_valid_separator_or_return!(buf, i, out);
     }
     out
 }
@@ -90,38 +93,39 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
     loop {
         let num_bytes = stream.read(&mut buf).await?;
         if num_bytes <= 0 { return Err(Error::new(ErrorKind::ConnectionAborted, "no bytes")); };
-        if buf[0] == '*' as u8 {
-            let tokens = tokenize2(&buf);
-            println!("tokens{:?}", tokens);
-        } else { //handle netcat
-            let s = from_utf8(&buf[0..num_bytes]).unwrap().trim(); //TODO handle UTF8
-            if let Ok(tokens) = tokenize(s) {
-                if tokens.len() == 0 {
-                    stream.write(ERR_UNK_CMD).await?;
-                }
-                let tokens = get_tokens(tokens);
-                match (tokens[0], tokens.len()) {
-                    ("GET", 2) => stream.write(get_req(tokens[1], &dict).await.as_ref()).await?,
-                    ("SET", 3) => stream.write(set_req(tokens[1], tokens[2], &dict).await.as_ref()).await?,
-                    ("SETNX", 3) => stream.write(setnx_req(tokens[1], tokens[2], &dict).await.as_ref()).await?,
-                    ("DEL", count) if count >= 1 => stream.write(del_req(&tokens[1..], &dict).await.as_ref()).await?,
-                    ("EXISTS", 2) => stream.write(exists_req(&tokens[1], &dict).await.as_ref()).await?,
-                    ("TYPE", 2) => stream.write(type_req(&tokens[1], &dict).await.as_ref()).await?,
-                    _ => stream.write(ERR_UNK_CMD).await?,
-                };
-            } else {
-                stream.write(ERR_UNK_CMD).await?;
-            }
+        let tokens = if buf[0] == '*' as u8 {
+            resp_tokenize(&buf[0..num_bytes])
+        } else {
+            netcat_tokenize(&buf[0..num_bytes])
+        };
+
+        println!("tokens{:?}", tokens);
+//        let tokens: Vec<&str> = tokens.iter().map(|x| x.as_str()).collect();
+        if tokens.len() == 0 {
+            stream.write(ERR_UNK_CMD).await?;
+            continue;
         }
+        match (tokens[0], tokens.len()) {
+            ("GET", 2) => stream.write(get_req(tokens[1], &dict).await.as_ref()).await?,
+            ("SET", 3) => stream.write(set_req(tokens[1], tokens[2], &dict).await.as_ref()).await?,
+            ("SETNX", 3) => stream.write(setnx_req(tokens[1], tokens[2], &dict).await.as_ref()).await?,
+            ("DEL", count) if count >= 1 => stream.write(del_req(&tokens[1..], &dict).await.as_ref()).await?,
+            ("EXISTS", 2) => stream.write(exists_req(tokens[1], &dict).await.as_ref()).await?,
+            ("TYPE", 2) => stream.write(type_req(tokens[1], &dict).await.as_ref()).await?,
+            _ => stream.write(ERR_UNK_CMD).await?,
+        };
     }
 }
 
-
+//TODO:
 //\item RENAME key newkey
 //\item KEYS regex\_pattern
 
-fn get_tokens(tokens: Vec<Token>) -> Vec<&str> {
-    tokens.iter()
+//TODO handle non utf8 properly
+fn netcat_tokenize(buf: &[u8]) -> Vec<&str> {
+    let s = from_utf8(buf).unwrap_or_default().trim();
+    let t = tokenize(s).unwrap_or_default();
+        t.iter()
         .filter(|&x| x.token_type == TokenType::Word)
         .map(|&x| x.text).collect()
 }
@@ -135,6 +139,7 @@ fn resp_bulk_format(actual_data: &str) -> String {
 }
 
 fn integer_format(x: isize) -> String {
+    //see https://redis.io/topics/protocol
     format!(":{}\r\n", x)
 }
 

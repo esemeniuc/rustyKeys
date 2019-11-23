@@ -23,7 +23,7 @@ pub(crate) async fn serve_request(tokens: &Vec<&str>, dict: &TestRCMap<String, S
 }
 
 
-pub(crate) async fn get_req(key: &str, dict: &TestRCMap<String, String>) -> String {
+async fn get_req(key: &str, dict: &TestRCMap<String, String>) -> String {
     //https://redis.io/commands/GET
     let dict = dict.read().await;
     match (*dict).get(key) {
@@ -32,7 +32,7 @@ pub(crate) async fn get_req(key: &str, dict: &TestRCMap<String, String>) -> Stri
     }
 }
 
-pub(crate) async fn set_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> String {
+async fn set_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> String {
     //https://redis.io/commands/SET
     //TODO Handle NX and XX
     let mut dict = dict.write().await;
@@ -41,7 +41,7 @@ pub(crate) async fn set_req(key: &str, val: &str, dict: &TestRCMap<String, Strin
     }
 }
 
-pub(crate) async fn setnx_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> String {
+async fn setnx_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> String {
     //https://redis.io/commands/setnx
     let key = String::from(key);
     let val = String::from(val);
@@ -53,7 +53,7 @@ pub(crate) async fn setnx_req(key: &str, val: &str, dict: &TestRCMap<String, Str
     formatter::integer_format(1)
 }
 
-pub(crate) async fn exists_req(key: &str, dict: &TestRCMap<String, String>) -> String {
+async fn exists_req(key: &str, dict: &TestRCMap<String, String>) -> String {
     //https://redis.io/commands/exists
     //TODO handle arbitrary number of keys
     let dict = dict.read().await;
@@ -63,7 +63,7 @@ pub(crate) async fn exists_req(key: &str, dict: &TestRCMap<String, String>) -> S
     }
 }
 
-pub(crate) async fn del_req(keys: &[&str], dict: &TestRCMap<String, String>) -> String {
+async fn del_req(keys: &[&str], dict: &TestRCMap<String, String>) -> String {
     //https://redis.io/commands/del
     let mut count: isize = 0;
     let mut dict = dict.write().await;
@@ -76,7 +76,7 @@ pub(crate) async fn del_req(keys: &[&str], dict: &TestRCMap<String, String>) -> 
     formatter::integer_format(count)
 }
 
-pub(crate) async fn type_req(key: &str, dict: &TestRCMap<String, String>) -> String {
+async fn type_req(key: &str, dict: &TestRCMap<String, String>) -> String {
     //https://redis.io/commands/type
     let dict = dict.read().await;
     match (*dict).contains_key(key) {

@@ -8,5 +8,5 @@ edition = "2018"
 
 [dependencies]
 #futures-preview = "=0.3.0-alpha.19"
-async-std = "1.0.1"
+async-std = "1.1.0"
 commands = "0.0.5"

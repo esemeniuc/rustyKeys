@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::io::{Error, ErrorKind};
 use std::str::from_utf8;
 
 use async_std::io;
@@ -93,7 +92,7 @@ async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::
 
     loop {
         let num_bytes = stream.read(&mut buf).await?;
-        if num_bytes <= 0 { return Err(Error::new(ErrorKind::ConnectionAborted, "no bytes")); };
+        if num_bytes <= 0 { return Ok(()); };
         let tokens = if buf[0] == '*' as u8 {
             resp_tokenize(&buf[0..num_bytes])
         } else {
@@ -206,7 +205,6 @@ async fn type_req(key: &str, dict: &TestRCMap<String, String>) -> String {
     }
 }
 
-
 fn main() -> io::Result<()> {
     test();
     let dict = Arc::new(RwLock::new(HashMap::new()));
@@ -218,7 +216,7 @@ fn main() -> io::Result<()> {
         while let Some(stream) = incoming.next().await {
             let stream = stream?;
             let dict = Arc::clone(&dict);
-            task::spawn(async { process(stream, dict).await.unwrap(); });
+            task::spawn(async { process(stream, dict).await.unwrap_or_default(); });
         }
         Ok(())
     })

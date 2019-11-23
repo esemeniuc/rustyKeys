@@ -10,44 +10,74 @@ use commands::tokenizer::{Token, tokenize, TokenType};
 
 const ERR_UNK_CMD: &[u8] = b"-ERR unknown command\r\n";
 const NIL_MSG: &str = "$-1\r\n";
+const CRLF: &[u8] = b"\r\n";
 
 type TestRCMap<T, U> = Arc<RwLock<HashMap<T, U>>>;
 
 fn test() {
-    println!("{:?}", tokenize2("*2\r\n$3\r\nGET\r\n$1\r\na\r\n".as_ref()));
-    assert!(tokenize2("*2\r\n$3\r\nGET\r\n$1\r\na\r\n".as_ref()) == vec!["GET", "a"]);
-//    assert!(tokenize2(&["*2\r\n$3\r\nGET\r\n$5\r\napple\r\n"] as &[u8]) == vec!["GET", "apple"]);
-//    assert!(tokenize2(&["*3\r\n$3\r\nSET\r\n$2\r\nXX\r\n$5\r\napple\r\n"] as &[u8]) == vec!["SET", "XX", "apple"]);
+    assert!(parse_int("1234\r\n".as_bytes()) == (1234, 4));
+    assert!(parse_int("0\r\n".as_bytes()) == (0, 1));
+    assert!(parse_int("\r\n".as_bytes()) == (0, 0));
+    assert!(parse_int("1\r\n".as_bytes()) == (1, 1));
+    assert!(parse_int("10391\r\n".as_bytes()) == (10391, 5));
+    assert!(tokenize2("*2\r\n$10\r\nGETTTTTTAB\r\n$11\r\naaaaaaaaaxy\r\n".as_ref()) == vec!["GETTTTTTAB", "aaaaaaaaaxy"]);
+    assert!(tokenize2("*2\r\n$3\r\nGET\r\n$5\r\napple\r\n".as_ref()) == vec!["GET", "apple"]);
+    assert!(tokenize2("*3\r\n$3\r\nSET\r\n$2\r\nXX\r\n$5\r\napple\r\n".as_ref()) == vec!["SET", "XX", "apple"]);
+    assert!(tokenize2("*1\r\n$3\r\nSET\r\n$2\r\nXX\r\n$5\r\napple\r\n".as_ref()) == vec!["SET", "XX", "apple"]);
+}
+
+//stops on non digit number
+//returns index of last parsed digit
+fn parse_int(buf: &[u8]) -> (usize, usize) {
+    let mut i = 0;
+    let mut out = 0usize;
+    while i < buf.len() && buf[i].is_ascii_digit() {
+        out *= 10;
+        out += (buf[i] as char).to_digit(10).unwrap_or_default() as usize;
+        i += 1;
+    }
+    (out, i)
 }
 
 fn tokenize2(buf: &[u8]) -> Vec<String> {
+/*eg. ran: cli.get('a')
+The client sends:
+*2\r\n //token count
+$3\r\n //first cmd length
+GET\r\n //command
+$1\r\n //next token len
+a\r\n*/ //token
     let mut out = Vec::new();
-    let mut i = 1;
-    while buf[i].is_ascii_digit() {
-        i += 1;
+    let (token_count, iter_offset) = parse_int(&buf[1..]); //first char is asterisk
+    let mut i = iter_offset + 1; //i points to next char after number
+    if i + CRLF.len() >= buf.len() ||
+        &buf[i..i + CRLF.len() ] != CRLF {
+        return out;
+    } else {
+        i += CRLF.len(); //point to beginning of rest
     }
-    let token_count = from_utf8(&buf[1..i]).unwrap_or_default(); //first char is asterisk
-    match token_count.parse::<usize>() {
-        Err(_) => return out,
-        Ok(token_count) => {
-            for i in 0..token_count {
-                if i + 2 >= buf.len() || &buf[i..i + 3] == "\r\n$".as_bytes() {
-                    println!("end fail");
-                    continue;
-                }
-                out.push(String::from(""));
-                /*cli.get('a')
-
-                The client sends:
-
-                *2\r\n //token count
-                $3\r\n //first cmd length
-                GET\r\n //command
-                $1\r\n //next token count
-                a\r\n*/
-            }
+    for _ in 0..token_count {
+        if buf[i] != '$' as u8 { return out; } else { i += 1; }
+        let (cmd_len, iter_offset) = parse_int(&buf[i..]);
+        i += iter_offset;
+//        println!("{} {} {:?}", i + CRLF.len() >= buf.len() ,  &buf[i..i + CRLF.len()] != CRLF , &buf[i..i + CRLF.len()]);
+        if i + CRLF.len() >= buf.len() ||
+            &buf[i..i + CRLF.len() ] != CRLF {
+            return out;
+        } else {
+            i += CRLF.len(); //point to beginning of rest
         }
-    };
+        if let Ok(x) = from_utf8(&buf[i..i + cmd_len]) {
+            out.push(String::from(x));
+        }
+        i += cmd_len ;
+        if i + CRLF.len() >= buf.len() ||
+            &buf[i..i + CRLF.len() ] != CRLF {
+            return out;
+        } else {
+            i += CRLF.len(); //point to beginning of rest
+        }
+    }
     out
 }
 

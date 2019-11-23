@@ -40,44 +40,45 @@ fn parse_int(buf: &[u8]) -> (usize, usize) {
     (out, i)
 }
 
+//consumes a new line if in range, and updates i to point after newline
+//else returns out
+macro_rules! consume_valid_newline_or_return {
+    ($buf: expr, $i: expr, $retval: expr) => {
+        if $i + CRLF.len() >= $buf.len() ||
+            &$buf[$i..$i + CRLF.len()] != CRLF {
+            return $retval;
+        } else {
+            $i += CRLF.len(); //point to beginning of rest
+        }
+    }
+}
+
 fn tokenize2(buf: &[u8]) -> Vec<String> {
-/*eg. ran: cli.get('a')
-The client sends:
-*2\r\n //token count
-$3\r\n //first cmd length
-GET\r\n //command
-$1\r\n //next token len
-a\r\n*/ //token
+    /*eg. ran: cli.get('a')
+    The client sends:
+    *2\r\n //token count
+    $3\r\n //first cmd length
+    GET\r\n //command
+    $1\r\n //next token len
+    a\r\n*/ //token
     let mut out = Vec::new();
     let (token_count, iter_offset) = parse_int(&buf[1..]); //first char is asterisk
     let mut i = iter_offset + 1; //i points to next char after number
-    if i + CRLF.len() >= buf.len() ||
-        &buf[i..i + CRLF.len() ] != CRLF {
-        return out;
-    } else {
-        i += CRLF.len(); //point to beginning of rest
-    }
+
+    consume_valid_newline_or_return!(buf, i, out);
     for _ in 0..token_count {
         if buf[i] != '$' as u8 { return out; } else { i += 1; }
-        let (cmd_len, iter_offset) = parse_int(&buf[i..]);
+        let (cmd_len, iter_offset) = parse_int(&buf[i..]); //get command length
         i += iter_offset;
-//        println!("{} {} {:?}", i + CRLF.len() >= buf.len() ,  &buf[i..i + CRLF.len()] != CRLF , &buf[i..i + CRLF.len()]);
-        if i + CRLF.len() >= buf.len() ||
-            &buf[i..i + CRLF.len() ] != CRLF {
-            return out;
-        } else {
-            i += CRLF.len(); //point to beginning of rest
-        }
+        consume_valid_newline_or_return!(buf, i, out);
+
+        //push token
         if let Ok(x) = from_utf8(&buf[i..i + cmd_len]) {
             out.push(String::from(x));
         }
-        i += cmd_len ;
-        if i + CRLF.len() >= buf.len() ||
-            &buf[i..i + CRLF.len() ] != CRLF {
-            return out;
-        } else {
-            i += CRLF.len(); //point to beginning of rest
-        }
+
+        i += cmd_len;
+        consume_valid_newline_or_return!(buf, i, out);
     }
     out
 }
@@ -205,7 +206,7 @@ fn main() -> io::Result<()> {
     test();
     let dict = Arc::new(RwLock::new(HashMap::new()));
     task::block_on(async {
-        let listener = TcpListener::bind("127.0.0.1:8080").await?;
+        let listener = TcpListener::bind("127.0.0.1:6379").await?;
         println!("Listening on {}", listener.local_addr()?);
         let mut incoming = listener.incoming();
 

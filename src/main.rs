@@ -13,35 +13,77 @@ const NIL_MSG: &str = "$-1\r\n";
 
 type TestRCMap<T, U> = Arc<RwLock<HashMap<T, U>>>;
 
+fn test() {
+    println!("{:?}", tokenize2("*2\r\n$3\r\nGET\r\n$1\r\na\r\n".as_ref()));
+    assert!(tokenize2("*2\r\n$3\r\nGET\r\n$1\r\na\r\n".as_ref()) == vec!["GET", "a"]);
+//    assert!(tokenize2(&["*2\r\n$3\r\nGET\r\n$5\r\napple\r\n"] as &[u8]) == vec!["GET", "apple"]);
+//    assert!(tokenize2(&["*3\r\n$3\r\nSET\r\n$2\r\nXX\r\n$5\r\napple\r\n"] as &[u8]) == vec!["SET", "XX", "apple"]);
+}
+
+fn tokenize2(buf: &[u8]) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut i = 1;
+    while buf[i].is_ascii_digit() {
+        i += 1;
+    }
+    let token_count = from_utf8(&buf[1..i]).unwrap_or_default(); //first char is asterisk
+    match token_count.parse::<usize>() {
+        Err(_) => return out,
+        Ok(token_count) => {
+            for i in 0..token_count {
+                if i + 2 >= buf.len() || &buf[i..i + 3] == "\r\n$".as_bytes() {
+                    println!("end fail");
+                    continue;
+                }
+                out.push(String::from(""));
+                /*cli.get('a')
+
+                The client sends:
+
+                *2\r\n //token count
+                $3\r\n //first cmd length
+                GET\r\n //command
+                $1\r\n //next token count
+                a\r\n*/
+            }
+        }
+    };
+    out
+}
+
 async fn process(mut stream: TcpStream, dict: TestRCMap<String, String>) -> io::Result<()> {
     println!("Accepted from: {}", stream.peer_addr()?);
-    stream.write(b"Welcome\r\n").await?;
-    let mut buf = [0; 1 << 10]; //1MB
+    let mut buf = [0u8; 1024]; //1MB
 
     loop {
         let num_bytes = stream.read(&mut buf).await?;
         if num_bytes <= 0 { return Err(Error::new(ErrorKind::ConnectionAborted, "no bytes")); };
-
-        let s = from_utf8(&buf[0..num_bytes]).unwrap().trim(); //TODO handle UTF8
-        if let Ok(tokens) = tokenize(s) {
-            if tokens.len() == 0 {
+        if buf[0] == '*' as u8 {
+            let tokens = tokenize2(&buf);
+            println!("tokens{:?}", tokens);
+        } else { //handle netcat
+            let s = from_utf8(&buf[0..num_bytes]).unwrap().trim(); //TODO handle UTF8
+            if let Ok(tokens) = tokenize(s) {
+                if tokens.len() == 0 {
+                    stream.write(ERR_UNK_CMD).await?;
+                }
+                let tokens = get_tokens(tokens);
+                match (tokens[0], tokens.len()) {
+                    ("GET", 2) => stream.write(get_req(tokens[1], &dict).await.as_ref()).await?,
+                    ("SET", 3) => stream.write(set_req(tokens[1], tokens[2], &dict).await.as_ref()).await?,
+                    ("SETNX", 3) => stream.write(setnx_req(tokens[1], tokens[2], &dict).await.as_ref()).await?,
+                    ("DEL", count) if count >= 1 => stream.write(del_req(&tokens[1..], &dict).await.as_ref()).await?,
+                    ("EXISTS", 2) => stream.write(exists_req(&tokens[1], &dict).await.as_ref()).await?,
+                    ("TYPE", 2) => stream.write(type_req(&tokens[1], &dict).await.as_ref()).await?,
+                    _ => stream.write(ERR_UNK_CMD).await?,
+                };
+            } else {
                 stream.write(ERR_UNK_CMD).await?;
             }
-            let tokens = get_tokens(tokens);
-            match (tokens[0], tokens.len()) {
-                ("GET", 2) => stream.write(get_req(tokens[1], &dict).await.as_ref()).await?,
-                ("SET", 3) => stream.write(set_req(tokens[1], tokens[2], &dict).await.as_ref()).await?,
-                ("SETNX", 3) => stream.write(setnx_req(tokens[1], tokens[2], &dict).await.as_ref()).await?,
-                ("DEL", count) if count >= 1 => stream.write(del_req(&tokens[1..], &dict).await.as_ref()).await?,
-                ("EXISTS", 2) => stream.write(exists_req(&tokens[1], &dict).await.as_ref()).await?,
-                ("TYPE", 2) => stream.write(type_req(&tokens[1], &dict).await.as_ref()).await?,
-                _ => stream.write(ERR_UNK_CMD).await?,
-            };
-        } else {
-            stream.write(ERR_UNK_CMD).await?;
         }
     }
 }
+
 
 //\item RENAME key newkey
 //\item KEYS regex\_pattern
@@ -53,10 +95,10 @@ fn get_tokens(tokens: Vec<Token>) -> Vec<&str> {
 }
 
 fn resp_bulk_format(actual_data: &str) -> String {
-    //A "$" byte followed by the number of bytes composing the string (a prefixed length), terminated by CRLF.
-    //The actual string data.
-    //A final CRLF.
-    //see https://redis.io/topics/protocol
+//A "$" byte followed by the number of bytes composing the string (a prefixed length), terminated by CRLF.
+//The actual string data.
+//A final CRLF.
+//see https://redis.io/topics/protocol
     format!("${}\r\n{}\r\n", actual_data.len(), actual_data)
 }
 
@@ -66,7 +108,7 @@ fn integer_format(x: isize) -> String {
 
 
 async fn get_req(key: &str, dict: &TestRCMap<String, String>) -> String {
-    //https://redis.io/commands/GET
+//https://redis.io/commands/GET
     let dict = dict.read().await;
     match (*dict).get(key) {
         Some(val) => resp_bulk_format(val),
@@ -75,8 +117,8 @@ async fn get_req(key: &str, dict: &TestRCMap<String, String>) -> String {
 }
 
 async fn set_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> String {
-    //https://redis.io/commands/SET
-    //TODO Handle NX and XX
+//https://redis.io/commands/SET
+//TODO Handle NX and XX
     let mut dict = dict.write().await;
     match (*dict).insert(String::from(key), String::from(val)) {
         _ => format!("+OK\r\n"),
@@ -84,7 +126,7 @@ async fn set_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> Stri
 }
 
 async fn setnx_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> String {
-    //https://redis.io/commands/setnx
+//https://redis.io/commands/setnx
     let key = String::from(key);
     let val = String::from(val);
     let mut dict = dict.write().await;
@@ -96,8 +138,8 @@ async fn setnx_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> St
 }
 
 async fn exists_req(key: &str, dict: &TestRCMap<String, String>) -> String {
-    //https://redis.io/commands/exists
-    //TODO handle arbitrary number of keys
+//https://redis.io/commands/exists
+//TODO handle arbitrary number of keys
     let dict = dict.read().await;
     match (*dict).contains_key(key) {
         true => integer_format(1),
@@ -106,7 +148,7 @@ async fn exists_req(key: &str, dict: &TestRCMap<String, String>) -> String {
 }
 
 async fn del_req(keys: &[&str], dict: &TestRCMap<String, String>) -> String {
-    //https://redis.io/commands/del
+//https://redis.io/commands/del
     let mut count: isize = 0;
     let mut dict = dict.write().await;
     for key in keys {
@@ -119,7 +161,7 @@ async fn del_req(keys: &[&str], dict: &TestRCMap<String, String>) -> String {
 }
 
 async fn type_req(key: &str, dict: &TestRCMap<String, String>) -> String {
-    //https://redis.io/commands/type
+//https://redis.io/commands/type
     let dict = dict.read().await;
     match (*dict).contains_key(key) {
         true => format!("+string\r\n"),
@@ -129,6 +171,7 @@ async fn type_req(key: &str, dict: &TestRCMap<String, String>) -> String {
 
 
 fn main() -> io::Result<()> {
+    test();
     let dict = Arc::new(RwLock::new(HashMap::new()));
     task::block_on(async {
         let listener = TcpListener::bind("127.0.0.1:8080").await?;

@@ -2,7 +2,7 @@
 
 A Rust multithreaded implementation of Redis.
 
-![RustyKeys Poster](https://raw.githubusercontent.com/esemeniuc/rustyKeys/media/poster.gif)
+![RustyKeys Poster](https://github.com/esemeniuc/rustyKeys/blob/master/media/poster.gif)
 Benchmark
 ```bash
 #GET and SET test

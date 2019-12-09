@@ -1,6 +1,6 @@
-# cpsc311Project
-Main project for CPSC 311
+# rustyKeys
 
+A Rust multithreaded implementation of Redis.
 
 ![RustyKeys Poster](https://raw.githubusercontent.com/esemeniuc/rustyKeys/media/poster.gif)
 Benchmark

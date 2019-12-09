@@ -17,6 +17,7 @@ pub(crate) async fn serve_request(tokens: &Vec<&str>, dict: &TestRCMap<String, S
         ("SETNX", 3) => setnx_req(tokens[1], tokens[2], &dict).await,
         ("DEL", count) if count >= 1 => del_req(&tokens[1..], &dict).await,
         ("EXISTS", 2) => exists_req(tokens[1], &dict).await,
+        ("RENAME", 2) => type_req(tokens[1], tokens[2] &dict).await,
         ("TYPE", 2) => type_req(tokens[1], &dict).await,
         _ => String::from(ERR_UNK_CMD),
     }
@@ -52,6 +53,20 @@ async fn setnx_req(key: &str, val: &str, dict: &TestRCMap<String, String>) -> St
     (*dict).insert(key, val);
     formatter::integer_format(1)
 }
+
+
+async fn rename_handle(key: &str, newkey: &str, dict: &TestRCMap<String, String>) -> String {
+    //https://redis.io/commands/setnx
+    let key = String::from(key);
+    let val = String::from(val);
+    let mut dict = dict.write().await;
+    if (*dict).contains_key(&key) {
+        return formatter::integer_format(0);
+    }
+    (*dict).insert(key, val);
+    formatter::integer_format(1)
+}
+
 
 async fn exists_req(key: &str, dict: &TestRCMap<String, String>) -> String {
     //https://redis.io/commands/exists

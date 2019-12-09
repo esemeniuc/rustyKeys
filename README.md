@@ -1,6 +1,8 @@
 # cpsc311Project
 Main project for CPSC 311
 
+
+![RustyKeys Poster](https://raw.githubusercontent.com/esemeniuc/rustyKeys/media/poster.gif)
 Benchmark
 ```bash
 #GET and SET test
